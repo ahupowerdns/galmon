@@ -1,0 +1,95 @@
+#!/bin/bash
+#
+# The script relies on the following project:
+# - https://github.com/multiarch/qemu-user-static
+# - https://github.com/multiarch/ubuntu-core
+# - https://github.com/multiarch/alpine
+#
+# It's also probably possible to use more official {i386,amd64,arm32v6,arm32v7,arm64v8}/alpine
+# images adding qemu binary from multiarch/qemu-user-static:{arm,arm64} to them.
+#
+# Register qemu-user-static before building
+# $ docker run --rm --privileged multiarch/qemu-user-static:register --reset
+
+set -e
+
+this_mach=$(uname --machine)
+ncpu=$(grep -c ^processor /proc/cpuinfo)
+
+if [ "$this_mach" != "x86_64" ]; then
+    echo "$0: build was tested on x86_64, not on this <$this_mach>" 1>&2
+fi
+
+mach=${1:-${this_mach}}
+libc=${2:-static}
+
+case "$mach" in
+    i686)
+        alpine=x86 # official: i386/alpine
+        ubuntu=x86
+        busybox=i386
+        ;;
+    x86_64)
+        alpine=x86_64 # official: amd64/alpine
+        ubuntu=x86_64
+        busybox=amd64
+        ;;
+    armv6l)
+        # For Raspberry 1 and Zero.
+        # Tested on Raspberry 1 B+ (BCM2835 rev. 0010).
+        alpine=armhf # official: arm32v6/alpine
+        ubuntu=*
+        busybox=arm32v6
+        ;;
+    armv7l)
+        # For Raspberry 2 and 3.
+        # Tested on Raspberry 3 Model B (BCM2835 revision a02082).
+        # Tested on Raspberry 3 Model B+ (BCM2835 revision a020d3).
+        alpine=armv7 # official: arm32v7/alpine
+        ubuntu=armhf
+        busybox=arm32v7
+        ;;
+    aarch64)
+        # For Raspberry 4?
+        alpine=arm64 # official: arm64v8/alpine
+        ubuntu=arm64 # or aarch64? See https://wiki.ubuntu.com/ARM/RaspberryPi#Ubuntu_arm64.2FAArch64
+        busybox=arm64v8
+        ;;
+    *)
+    echo "$0: unknown machine hardware name <$mach>, known are: {i686,x86_64,armv6l,armv7l,aarch64}" 1>&2
+    exit 1
+esac
+
+case "$libc" in
+    static)
+        img="--build-arg ALPINE=multiarch/alpine:${alpine}-v"
+        ;;
+    glibc)
+        if [ "$ubuntu" = "*" ]; then
+            echo "$0: unsupported combination of machine <$mach> and libc <$libc>" 1>&2
+            exit 1
+        fi
+        img="--build-arg UBUNTU=multiarch/ubuntu-core:${ubuntu}- --build-arg BUSYBOX=${busybox}/busybox:"
+        ;;
+    *)
+        echo "$0: unknown libc <$libc>, known are: {static,glibc}" 1>&2
+        exit 1
+esac
+
+# Base image is set with `ARG` and not with `sed Dockerfile | docker build -f -`
+# as streaming Dockerfile to stdin actually saves it to a file and adds a line
+# like ".dockerfile.8a2b17b1408769bf5047" to .dockerignore. And .dockerignore
+# should not be touched to make reasonable `githash.h`.
+
+tag="${mach}-${libc}"
+
+docker build \
+    --build-arg NCPU=${ncpu} \
+    ${img} \
+    -f Dockerfile.ubxtool.${libc} \
+    --tag ubxtool:${tag} \
+    .
+
+cntr=$(docker create ubxtool:${tag})
+docker cp ${cntr}:/opt/ubxtool bin/ubxtool.${tag}
+docker rm ${cntr}

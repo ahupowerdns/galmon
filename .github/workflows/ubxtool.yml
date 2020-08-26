@@ -1,0 +1,104 @@
+name: Release static ubxtool binaries
+
+on:
+  push:
+    tags:
+    - 'ubxtool-v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mach: [i686, x86_64, armv6l, armv7l, aarch64]
+    steps:
+    - uses: actions/checkout@v2
+    - name: submodules
+      run: git submodule update --init --recursive --depth=1
+    - name: register qemu-user-static
+      run: sudo docker run --rm --interactive --privileged multiarch/qemu-user-static:register --reset
+    - name: build-ubxtool
+      run: ./build-ubxtool ${{ matrix.mach }} static && rm -f bin/.keep
+    - name: xz
+      run: xz -8 bin/ubxtool.${{ matrix.mach }}-static
+    - uses: actions/upload-artifact@v1
+      with:
+        name: ubxtool
+        path: bin/ubxtool.${{ matrix.mach }}-static.xz
+      # All binaries are uploaded to the same artifact archive.  It may
+      # eventually change: https://github.com/actions/upload-artifact/issues/24
+
+  # release does not need 5 parallel running VMs, so it's a separate job
+  release:
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      # All the steps but download-artifact and sha256sum need it.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/download-artifact@v1
+      with:
+        name: ubxtool
+
+    - name: sha256sum
+      working-directory: ubxtool
+      run: sha256sum ubxtool.*.xz >SHA256SUMS
+
+    - uses: actions/create-release@v1
+      id: create_release
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: GitHub-built release
+        draft: false
+        prerelease: true
+
+    # That's a copy-pasta instead of a matrix job to avoid spawing a VM for each upload.
+    - name: upload i686
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ubxtool/ubxtool.i686-static.xz
+        asset_name: ubxtool.i686-static.xz
+        asset_content_type: application/x-xz
+
+    - name: upload x86_64
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ubxtool/ubxtool.x86_64-static.xz
+        asset_name: ubxtool.x86_64-static.xz
+        asset_content_type: application/x-xz
+
+    - name: upload armv6l
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ubxtool/ubxtool.armv6l-static.xz
+        asset_name: ubxtool.armv6l-static.xz
+        asset_content_type: application/x-xz
+
+    - name: upload armv7l
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ubxtool/ubxtool.armv7l-static.xz
+        asset_name: ubxtool.armv7l-static.xz
+        asset_content_type: application/x-xz
+
+    - name: upload aarch64
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ubxtool/ubxtool.aarch64-static.xz
+        asset_name: ubxtool.aarch64-static.xz
+        asset_content_type: application/x-xz
+
+    # The last one.
+    - name: upload SHA256SUMS
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ubxtool/SHA256SUMS
+        asset_name: SHA256SUMS
+        asset_content_type: text/plain

@@ -120,6 +120,24 @@ docker run -d --restart=always --device=/dev/ttyACM0 --name=galmon berthubert/ga
 To make your docker container update automatically you could use a tool such as
 [watchtower](https://containrrr.github.io/watchtower/).
 
+Build `ubxtool` in Docker
+-------------------------
+
+To build a minimal `ubxtool` docker image:
+
+```
+git clone https://github.com/ahupowerdns/galmon.git --recursive
+./build-ubxtool
+```
+
+It may also cross-compile a binary and an image for a Raspberry Pi:
+
+```
+git clone https://github.com/ahupowerdns/galmon.git --recursive
+docker run -it --rm --privileged multiarch/qemu-user-static:register --reset
+./build-ubxtool armv6l
+```
+
 Running
 -------
 On u-blox: 

@@ -27,6 +27,8 @@ CHEAT_ARG := $(shell ./update-git-hash-if-necessary)
 PROGRAMS = navparse ubxtool navnexus navcat navrecv navdump testrunner navdisplay tlecatch reporter sp3feed \
 	galmonmon rinreport rinjoin rtcmtool gndate septool navmerge
 
+EXTRA_PROGRAMS = ubxtool.static ubxtool.nodeps
+
 all: navmon.pb.cc $(PROGRAMS)
 
 -include Makefile.local
@@ -44,7 +46,7 @@ H2OPP=ext/powerblog/h2o-pp.o
 SIMPLESOCKETS=ext/powerblog/ext/simplesocket/swrappers.o ext/powerblog/ext/simplesocket/sclasses.o  ext/powerblog/ext/simplesocket/comboaddress.o 
 
 clean:
-	rm -f *~ *.o *.d ext/*/*.o ext/*/*.d $(PROGRAMS) navmon.pb.h navmon.pb.cc $(patsubst %.cc,%.o,$(wildcard ext/sgp4/libsgp4/*.cc)) $(H2OPP) $(SIMPLESOCKETS)
+	rm -f *~ *.o *.d ext/*/*.o ext/*/*.d $(PROGRAMS) $(EXTRA_PROGRAMS) navmon.pb.h navmon.pb.cc $(patsubst %.cc,%.o,$(wildcard ext/sgp4/libsgp4/*.cc)) $(H2OPP) $(SIMPLESOCKETS)
 	rm -f ext/fmt-6.1.2/src/format.[do] ext/sgp4/libsgp4/*.d ext/powerblog/ext/simplesocket/*.d
 
 help2man:
@@ -129,8 +131,16 @@ rtcmtool: rtcmtool.o navmon.pb.o githash.o ext/fmt-6.1.2/src/format.o  bits.o nm
 	$(CXX) -std=gnu++17 $^ -o $@ -L/usr/local/lib -lz -pthread -lprotobuf -lzstd
 
 
-ubxtool: navmon.pb.o ubxtool.o ubx.o bits.o ext/fmt-6.1.2/src/format.o galileo.o  gps.o beidou.o navmon.o ephemeris.o $(SIMPLESOCKETS) osen.o githash.o nmmsender.o zstdwrap.o 
+UBXTOOL_DEPS = navmon.pb.o ubxtool.o ubx.o bits.o ext/fmt-6.1.2/src/format.o galileo.o  gps.o beidou.o navmon.o ephemeris.o $(SIMPLESOCKETS) osen.o githash.o nmmsender.o zstdwrap.o
+
+ubxtool: $(UBXTOOL_DEPS)
 	$(CXX) -std=gnu++17 $^ -o $@ -L/usr/local/lib -lprotobuf -pthread -lzstd
+# Static build with musl on alpine and clang
+ubxtool.static: $(UBXTOOL_DEPS)
+	$(CXX) -std=gnu++17 $^ -o $@ -L/usr/local/lib -lprotobuf -pthread -lzstd -lstdc++ -static
+# Static linking of `glibc` is non-trivial, so glibc is kept dynamically linked
+ubxtool.nodeps: $(UBXTOOL_DEPS)
+	$(CXX) -std=gnu++17 $^ -o $@ -L/usr/local/lib /usr/lib/*-linux-*/libprotobuf.a -pthread /usr/lib/*-linux-*/libzstd.a -static-libgcc -static-libstdc++
 
 septool: navmon.pb.o septool.o bits.o ext/fmt-6.1.2/src/format.o galileo.o  gps.o beidou.o navmon.o ephemeris.o $(SIMPLESOCKETS) osen.o githash.o nmmsender.o zstdwrap.o 
 	$(CXX) -std=gnu++17 $^ -o $@ -L/usr/local/lib -lprotobuf -pthread -lzstd

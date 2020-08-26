@@ -1,0 +1,39 @@
+# See `build-ubxtool` script for cross-compilation options.
+
+# `FROM` needs `ARG`s to be specified before the very first `FROM` instruction.
+# See https://docs.docker.com/engine/reference/builder/#understand-how-arg-and-from-interact
+ARG UBUNTU=ubuntu:
+ARG BUSYBOX=busybox:
+
+FROM ${UBUNTU}bionic AS build-env
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV LC_ALL C.UTF-8
+
+# This allows you to use a local Ubuntu mirror
+ARG APT_URL=
+ENV APT_URL ${APT_URL:-mirror://mirrors.ubuntu.com/mirrors.txt}
+RUN set -ex && \
+    sed -i "s%http://archive.ubuntu.com/ubuntu/%${APT_URL}%" /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y \
+        build-essential \
+        g++ \
+        git \
+        libprotobuf-dev \
+        libzstd-dev \
+        make \
+        protobuf-compiler \
+    && \
+    apt-get -y clean && \
+    :
+
+ARG NCPU=1
+ADD . /galmon/
+WORKDIR /galmon
+RUN make -j$NCPU ubxtool.nodeps
+
+FROM ${BUSYBOX}glibc
+COPY --from=build-env /galmon/ubxtool.nodeps /opt/ubxtool
+ENTRYPOINT ["/opt/ubxtool"]

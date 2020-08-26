@@ -18,6 +18,7 @@
 #include <iostream>
 #include <fstream>
 #include <string.h>
+#include <signal.h>
 #include "fmt/format.h"
 #include "fmt/printf.h"
 #include "bits.hh"
