@@ -143,6 +143,9 @@ var Tooltip;
 
 function create_tooltop()
 {
+	if (Tooltip) {
+		return;
+	}
 	// create a tooltip
 	Tooltip = d3.select("#combined")
 		.append("span")
