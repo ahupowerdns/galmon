@@ -157,6 +157,10 @@ public:
   {
     return d_raw.substr(6, d_raw.size()-8);
   }
+  const basic_string<uint8_t>& getRaw() const
+  {
+    return d_raw;
+  }
   std::basic_string<uint8_t> d_raw;
 };
 
@@ -519,6 +523,7 @@ int main(int argc, char** argv)
   string owner;
   string remark;
   bool doCompress=true;
+  string ubxUDPDestination;
   app.add_option("--destination,-d", destinations, "Send output to this IPv4/v6 address");
   app.add_flag("--wait", doWait, "Wait a bit, do not try to read init messages");
   //  app.add_flag("--compress,-z", doCompress, "Use compressed protocol for network transmission");
@@ -540,6 +545,7 @@ int main(int argc, char** argv)
   app.add_option("--fuzz-position,-f", fuzzPositionMeters, "Fuzz position by this many meters");
   app.add_option("--owner,-o", owner, "Name/handle/nick of owner/operator");
   app.add_option("--remark", remark, "Remark for this station");
+  app.add_option("--udp-ubx", ubxUDPDestination, "Send UBX messages over UDP to this IPv4/v6 address and port");
   
   int surveyMinSeconds = 0;
   int surveyMinCM = 0;
@@ -572,6 +578,27 @@ int main(int argc, char** argv)
   if(!(doGPS || doGalileo || doGlonass || doBeidou)) {
     cerr<<"Enable at least one of --gps, --galileo, --glonass, --beidou"<<endl;
     return EXIT_FAILURE;
+  }
+
+  ComboAddress ubxUDPAddress;
+  int ubxUDPSocket{0};
+  if(!ubxUDPDestination.empty()) {
+    try {
+      ubxUDPAddress = ComboAddress(ubxUDPDestination);
+    } catch (const runtime_error &e) {
+      cerr<<"udp-ubx: "<<e.what()<<endl;
+      return EXIT_FAILURE;
+    }
+    if(ubxUDPAddress.sin4.sin_port==0) {
+      cerr<<"udp-ubx: Must specify port number as part of destination: "<<ubxUDPDestination<<endl;
+      return EXIT_FAILURE;
+    }
+    try {
+      ubxUDPSocket = SSocket(AF_INET, SOCK_DGRAM);
+    } catch (const runtime_error &e) {
+      cerr<<"udp-ubx: "<<e.what()<<endl;
+      return EXIT_FAILURE;
+    }
   }
 
   signal(SIGPIPE, SIG_IGN);
@@ -1108,6 +1135,11 @@ int main(int argc, char** argv)
     try {
       auto [msg, timestamp] = getUBXMessage(fd, nullptr);
       (void)timestamp;
+
+      if(ubxUDPSocket) {
+        SSendto(ubxUDPSocket, string((char *)msg.getRaw().c_str(), msg.getRaw().size()), ubxUDPAddress);
+      }
+
       auto payload = msg.getPayload();
       
       if(msg.getClass() == 0x01 && msg.getType() == 0x07) {  // UBX-NAV-PVT

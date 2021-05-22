@@ -181,7 +181,7 @@ to stdout, add `--stdout`.
 
 Tooling:
 
- * ubxtool: can configure a u-blox 8 chipset, parses its output & will
+ * ubxtool: can configure a u-blox 8/9 chipset, parses its output & will
    convert it into a protbuf stream of GNSS NAV frames + metadata
    Adds 64-bit timestamps plus origin information to each message
  * septool: ingests the Septentrio binary format (SBF) and converts it to our
@@ -469,4 +469,5 @@ ubxtool
    start date)
  * Can also read from disk
  * Careful to add the right timestamps
-
+ * Can send UBX protocol messages as UDP datagrams (using the `--udp-ubx`)
+   command-line argument; this can be used to feed GNSS data to `gpsd`
