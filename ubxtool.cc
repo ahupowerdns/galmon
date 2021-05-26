@@ -778,8 +778,17 @@ int main(int argc, char** argv)
         }
       }
       if(doSurveyReset) {
-          uint8_t cmd = 0x3d;                   //  vers  res   survey ign      
-          auto msg = buildUbxMessage(0x06, cmd, 
+        uint8_t cmd;
+        std::basic_string<uint8_t> msg;
+        if(version9) {
+          cmd = 0x8a;
+          msg = buildUbxMessage(0x06, cmd, {0x00, 0x01, 0x00, 0x00,
+              0x01,0x00,0x03,0x20, 0, // survey in mode
+              });
+        }
+        else {	
+          cmd = 0x3d;                   //  vers  res   survey ign      
+          msg = buildUbxMessage(0x06, cmd, 
           { 0,0,0,0, // survey-in, res, flag1, flag2
             0,0,0,0, // x
             0,0,0,0, // y
@@ -788,6 +797,7 @@ int main(int argc, char** argv)
             0,0,0,0,
             0,0,0,0
             });
+        }
         cerr<<humanTimeNow()<<" Sending survey-reset commmand"<<endl;
       
         if(sendAndWaitForUBXAckNack(fd, 2, msg, 0x06, cmd)) { 
